@@ -32,6 +32,22 @@ cd gamevault
 
 Manual: descarga el `.plasmoid` desde [Releases](https://github.com/ezku100/gamevault/releases/latest), luego clic derecho en el panel → Añadir o gestionar elementos gráficos → Obtener nuevos → Instalar desde archivo.
 
+## Atajos de teclado
+
+| Tecla | Acción |
+|---|---|
+| `←` `→` `↑` `↓` | Mover selección |
+| `Enter` / `Espacio` | Lanzar juego |
+| `Esc` | Limpiar búsqueda → cerrar buscador → cerrar drawer |
+| `Tab` / `Shift+Tab` | Siguiente / anterior categoría |
+| `Ctrl+F` | Marcar / desmarcar favorito |
+| `Ctrl+O` | Ocultar / mostrar juego |
+| `Ctrl+H` | Abrir categoría Ocultos |
+| `F5` | Reescanear biblioteca |
+| Escribir | Abre el buscador y filtra |
+
+Atajo global sugerido: `Meta+Ctrl+G` (clic derecho al widget → Configurar → Atajos).
+
 ## Créditos
 
 - Basado en GameDrawer de atopion
