@@ -1,0 +1,16 @@
+{
+    "KPlugin": {
+        "Authors": [
+            { "Name": "atopion" }
+        ],
+        "Category": "Gaming",
+        "Description": "Game Vault por ezku: categorias con Tab, favoritos, ocultos y ultimo jugado primero.",
+        "Icon": "input-gaming",
+        "Id": "com.ezku.gamevault",
+        "Name": "Game Vault (ezku)",
+        "License": "GPL-3.0-or-later",
+        "Version": "1.4"
+    },
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

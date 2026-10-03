@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<kcfg xmlns="http://www.kde.org/standards/kcfg/1.0"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://www.kde.org/standards/kcfg/1.0
+      http://www.kde.org/standards/kcfg/1.0/kcfg.xsd">
+  <kcfgfile name=""/>
+  <group name="General">
+    <entry name="excludePatterns" type="StringList">
+      <default>Proton,Steam Linux Runtime,Steamworks Common Redistributables</default>
+    </entry>
+    <entry name="followAccent" type="Bool">
+      <default>true</default>
+    </entry>
+    <entry name="bgColor" type="String">
+      <default>#12131c</default>
+    </entry>
+    <entry name="accentColor" type="String">
+      <default>#ffffff</default>
+    </entry>
+    <entry name="textColor" type="String">
+      <default>#e6e6eb</default>
+    </entry>
+    <entry name="bgOpacity" type="Double">
+      <default>0.93</default>
+    </entry>
+    <entry name="cornerRadius" type="Int">
+      <default>14</default>
+    </entry>
+    <entry name="mouseEnabled" type="Bool">
+      <default>false</default>
+    </entry>
+  </group>
+</kcfg>
