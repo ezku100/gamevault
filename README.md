@@ -14,7 +14,13 @@ Selector de juegos flotante para Plasma 6: Steam, emulación, atajos no-Steam y 
 
 ![Game Vault flotando](screenshots/gamevault-drawer.png)
 
-![Ajustes](screenshots/gamevault-settings.png)
+![Categorías con Tab](screenshots/gamevault-tabs.png)
+
+![Juego al frente](screenshots/gamevault-focus.png)
+
+## Ajustes
+
+![Ajustes con secciones](screenshots/gamevault-settings.png)
 
 ## Instalar
 
