@@ -1,14 +1,13 @@
 # Game Vault
 
-Selector de juegos flotante para Plasma 6: Steam, emulación, atajos no-Steam y manuales en un drawer central con categorías, buscador y último jugado primero.
+Tu colección de juegos, un atajo de distancia. Un drawer flotante para Plasma 6 que junta tu biblioteca de Steam, tus ROMs emuladas y tus lanzadores en un solo lugar bonito y rápido de usar.
 
-- **Categorías con Tab**: Todos, Recientes, Steam, Emulación, No-Steam, Favoritos y Ocultos (oculta, se abre con Ctrl+H).
-- **Teclado primero**: flechas para navegar, Enter lanza, F5 reescanea, Ctrl+F favorito, Ctrl+O ocultar.
-- **Buscador** que se abre al escribir, con debounce y navegación sin perder el foco.
-- **Último jugado primero**: registra tus lanzamientos y ordena por recencia real.
-- **Tema autónomo**: sigue el acento de KDE en vivo, sin scripts; colores manuales con ruedita en ajustes.
-- **Arte inteligente**: usa tu portada amplia de Steam y se autocura si Steam reescribe el atajo.
-- Mouse opcional (apagado por defecto) y panel de ajustes con scroll.
+- **Todo ordenado**: pestañas para Todos, Recientes, Steam, Emulación, No-Steam y Favoritos, más una categoría secreta de Ocultos. Cambias entre ellas con Tab.
+- **Sin tocar el mouse**: navegas con flechas, lanzas con Enter, marcas favoritos con Ctrl+F y escondes juegos con Ctrl+O.
+- **Empieza a escribir y filtra**: el buscador aparece solo y no te roba el foco.
+- **Siempre primero lo último que jugaste**: el Vault recuerda qué abriste y lo pone al frente.
+- **Se viste con tu escritorio**: toma el color de acento de KDE al instante, sin scripts raros. Y si prefieres, ponle tus colores a mano.
+- **Tus portadas como deben verse**: usa tu portada amplia de Steam y se arregla solo si Steam mueve tus atajos.
 
 ## Capturas
 
