@@ -234,6 +234,7 @@ PlasmoidItem {
                     mainItem.forceActiveFocus()
                     mainItem.startFocusTimer()
                     mainItem.startCenterTimer()
+                    root.applyFilters()
                     root.scanGames(true)
                 } else {
                     focusTimer.stop()
@@ -304,11 +305,15 @@ PlasmoidItem {
                     var safe = String(g.name).replace(/"/g, '\\"')
                     root.runCommand('python3 $HOME/.local/share/plasma/plasmoids/com.ezku.gamevault/contents/scripts/toggle_hidden.py "' + safe + '"')
                     var target = String(g.name).toLowerCase()
+                    var nowHidden = !g.hidden
                     for (var i = 0; i < root.rawGames.length; i++) {
                         var e = root.rawGames[i]
-                        if (e && e.name && String(e.name).toLowerCase() === target) e.hidden = !g.hidden
+                        if (e && e.name && String(e.name).toLowerCase() === target) e.hidden = nowHidden
                     }
-                    root.applyFilters()
+                    // Solo reconstruir si sale de la vista (evita el parpadeo)
+                    var leavesView = (category !== "Ocultos" && nowHidden)
+                        || (category === "Ocultos" && !nowHidden)
+                    if (leavesView) root.applyFilters()
                 }
 
                 function toggleFavorite() {
@@ -318,22 +323,28 @@ PlasmoidItem {
                     var safe = String(g.name).replace(/"/g, '\\"')
                     root.runCommand('python3 $HOME/.local/share/plasma/plasmoids/com.ezku.gamevault/contents/scripts/toggle_favorite.py "' + safe + '"')
                     var target = String(g.name).toLowerCase()
+                    var nowFav = !g.favorite
                     for (var i = 0; i < root.rawGames.length; i++) {
                         var e = root.rawGames[i]
-                        if (e && e.name && String(e.name).toLowerCase() === target) e.favorite = !g.favorite
+                        if (e && e.name && String(e.name).toLowerCase() === target) e.favorite = nowFav
                     }
-                    root.applyFilters()
+                    // Solo reconstruir si sale de la vista (evita el parpadeo):
+                    // la estrella se actualiza sola por binding en el mismo delegate
+                    if (category === "Favoritos" && !nowFav) root.applyFilters()
                 }
                 readonly property real tileH: (height - contentTop - 14 - 44) / 1.3
                 readonly property real tileW: tileH * 2.1395
                 readonly property real tileGap: 48
-                // Sin scripts: el acento se toma del sistema en vivo (blanco si no hay)
+                // Sin scripts: el acento se toma del sistema en vivo (blanco si no hay).
+                // Si el tema no entrega acento válido se usan los colores manuales
                 readonly property bool followAccent: Plasmoid.configuration.followAccent ?? true
                 readonly property color sysAccent: Kirigami.Theme.highlightColor
-                readonly property string themeBg: followAccent
+                readonly property bool sysAccentOk: sysAccent.a > 0
+                readonly property bool useSysAccent: followAccent && sysAccentOk
+                readonly property string themeBg: useSysAccent
                     ? Qt.darker(sysAccent, 4.0).toString()
                     : (Plasmoid.configuration.bgColor || "#12131c")
-                readonly property string themeAccent: followAccent
+                readonly property string themeAccent: useSysAccent
                     ? sysAccent.toString()
                     : (Plasmoid.configuration.accentColor || "#ffffff")
                 readonly property string themeText: Plasmoid.configuration.textColor || "white"
