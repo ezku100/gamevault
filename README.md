@@ -32,6 +32,13 @@ cd gamevault
 
 Manual: descarga el `.plasmoid` desde [Releases](https://github.com/ezku100/gamevault/releases/latest), luego clic derecho en el panel → Añadir o gestionar elementos gráficos → Obtener nuevos → Instalar desde archivo.
 
+## Agregar al panel
+
+1. Clic derecho en el panel (o el escritorio) → **Añadir o gestionar elementos gráficos**.
+2. Busca **Game Vault** y agrégalo (puedes arrastrarlo al panel).
+3. Opcional: clic derecho al icono → **Configurar** → **Atajos** → asigna un atajo global (sugerido `Meta+Ctrl+G`).
+4. Si no aparece tras instalar, reinicia Plasma: `nohup plasmashell --replace >/tmp/plasmashell.log 2>&1 &`
+
 ## Atajos de teclado
 
 | Tecla | Acción |
@@ -50,6 +57,6 @@ Atajo global sugerido: `Meta+Ctrl+G` (clic derecho al widget → Configurar → 
 
 ## Créditos
 
-- Basado en GameDrawer de atopion
+- Basado en [GameDrawer](https://github.com/atopion/gamedrawer) de atopion
 - Fork, categorías y estilos: ezku
 - Licencia: GPLv3
