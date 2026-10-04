@@ -1,6 +1,6 @@
 # Game Vault
 
-Tu colección de juegos, un atajo de distancia. Un drawer flotante para Plasma 6 que junta tu biblioteca de Steam, tus ROMs emuladas y tus lanzadores en un solo lugar bonito y rápido de usar.
+Game Vault es un drawer flotante para Plasma 6 donde vive toda tu colección: tus juegos de Steam, tus ROMs emuladas y tus lanzadores externos, listos para abrir con un atajo.
 
 - **Todo ordenado**: pestañas para Todos, Recientes, Steam, Emulación, No-Steam y Favoritos, más una categoría secreta de Ocultos. Cambias entre ellas con Tab.
 - **Sin tocar el mouse**: navegas con flechas, lanzas con Enter, marcas favoritos con Ctrl+F y escondes juegos con Ctrl+O.
