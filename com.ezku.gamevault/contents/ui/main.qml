@@ -500,36 +500,46 @@ PlasmoidItem {
                     else moveSelectionAnimated(delta)
                 }
 
-                // Índice siguiente dentro de las copias centrales (loop real)
+                // Índice siguiente: vuelta aritmética en todo el arreglo.
+                // El último y el primero SIEMPRE son adyacentes (copias del
+                // loop), así que cada paso anima igual sin saltos
                 function advanceIndex(delta) {
                     var total = loopedGames.length
                     if (total === 0) return currentIndex
-                    var n = filteredGames.length
                     var next = (currentIndex + delta) % total
                     if (next < 0) next += total
-                    // Rebote entre copias centrales: loop infinito real
-                    if (n > 0) {
-                        var mid = n * Math.floor(loopReps() / 2)
-                        while (next < mid) next += n
-                        while (next >= mid + n) next -= n
-                        next = Math.min(next, total - 1)
-                    }
                     return next
+                }
+
+                // Recentrado invisible: si el índice salió de la copia central
+                // se traslada a su equivalente y se compensa el scroll exacto
+                // (mismos juegos en pantalla: no se percibe)
+                function rebaseInPlace() {
+                    var n = filteredGames.length
+                    var total = loopedGames.length
+                    if (n === 0 || total === 0) return
+                    var mid = n * Math.floor(loopReps() / 2)
+                    if (currentIndex < mid || currentIndex >= mid + n) {
+                        var off = ((currentIndex % n) + n) % n
+                        var shifted = Math.min(mid + off, total - 1)
+                        var dIndex = shifted - currentIndex
+                        currentIndex = shifted
+                        flickable.contentX -= dIndex * (tileW + tileGap)
+                    }
                 }
 
                 function moveSelectionAnimated(delta) {
                     if (loopedGames.length === 0) return
-                    var next = advanceIndex(delta)
-                    var wrapped = (delta > 0 && next < currentIndex) || (delta < 0 && next > currentIndex)
-                    currentIndex = next
-                    // Al dar la vuelta se salta sin animar el scroll largo
-                    ensureVisible(!wrapped)
+                    rebaseInPlace()
+                    currentIndex = advanceIndex(delta)
+                    ensureVisible(true)
                     settleTimer.restart()
                 }
 
                 // Mantener: salto exacto sin animar (el foco queda clavado)
                 function stepHeld(delta) {
                     if (loopedGames.length === 0) return
+                    rebaseInPlace()
                     currentIndex = advanceIndex(delta)
                     scrollAnim.stop()
                     ensureVisible(false)
@@ -662,7 +672,10 @@ PlasmoidItem {
                 Timer {
                     id: settleTimer
                     interval: 150
-                    onTriggered: drawerRoot.ensureVisible(false)
+                    onTriggered: {
+                        drawerRoot.rebaseInPlace()
+                        drawerRoot.ensureVisible(false)
+                    }
                 }
 
                 // Barrido al cambiar de categoría: atenuado breve de la fila
