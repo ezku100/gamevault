@@ -248,6 +248,7 @@ PlasmoidItem {
                 if (!mainItem) return
                 if (visible) {
                     mainItem.resetLoopIndex()
+                    mainItem.stopHold()
                     mainItem.category = "Todos"
                     mainItem.searchText = ""
                     searchField.text = ""
@@ -264,6 +265,7 @@ PlasmoidItem {
                     focusTimer.stop()
                     centerTimer.stop()
                     settleTimer.stop()
+                    holdTimer.stop()
                     fixupTimer.stop()
                     scanMinTimer.stop()
                     scanStatusTimer.stop()
@@ -281,6 +283,11 @@ PlasmoidItem {
                 property int currentIndex: 0
                 // Centrado pendiente (el área puede no tener ancho al abrir)
                 property bool needsCenter: false
+                // Atenuado de barrido al cambiar de categoría (1 = normal)
+                property real catDim: 1.0
+                // Ola de entrada: los delegados creados con esto activo
+                // entran escalonados (lo apaga un timer tras el cambio)
+                property bool waveArmed: false
                 // Al buscar se reserva calle arriba para el campo (sin encimarse)
                 readonly property real contentTop: searchVisible ? 58 : 14
                 property string searchText: ""
@@ -347,6 +354,12 @@ PlasmoidItem {
 
                 function setCategory(c) {
                     category = c
+                    stopHold()
+                    // Barrido: la fila se atenúa y vuelve (corte visible)
+                    catFlashAnim.restart()
+                    // Ola: los delegados del set nuevo entran escalonados
+                    waveArmed = true
+                    waveClearTimer.restart()
                     resetLoopIndex()
                     centerTimer.start()
                     fixupTimer.restart()
@@ -457,9 +470,40 @@ PlasmoidItem {
                     }
                 }
 
-                function moveSelection(delta) {
+                // Pulsación con repetición: el primer toque anima centrado,
+                // mantener repite por timer con saltos exactos (sin deriva)
+                property bool holding: false
+                property int holdDelta: 0
+                function pressStep(delta, isRepeat) {
+                    if (isRepeat) startHold(delta)
+                    else { stopHold(); moveSelectionAnimated(delta) }
+                }
+                function startHold(delta) {
+                    holdDelta = delta
+                    if (holding) return
+                    holding = true
+                    stepHeld(delta)
+                    holdTimer.start()
+                }
+                function stopHold() {
+                    holding = false
+                    holdTimer.stop()
+                }
+                function releaseHold() {
+                    var wasHolding = holding
+                    stopHold()
+                    if (wasHolding) ensureVisible(false)
+                }
+                // Compat: otros llaman sin flag (siempre animado)
+                function moveSelection(delta, held) {
+                    if (held) stepHeld(delta)
+                    else moveSelectionAnimated(delta)
+                }
+
+                // Índice siguiente dentro de las copias centrales (loop real)
+                function advanceIndex(delta) {
                     var total = loopedGames.length
-                    if (total === 0) return
+                    if (total === 0) return currentIndex
                     var n = filteredGames.length
                     var next = (currentIndex + delta) % total
                     if (next < 0) next += total
@@ -470,11 +514,25 @@ PlasmoidItem {
                         while (next >= mid + n) next -= n
                         next = Math.min(next, total - 1)
                     }
+                    return next
+                }
+
+                function moveSelectionAnimated(delta) {
+                    if (loopedGames.length === 0) return
+                    var next = advanceIndex(delta)
                     var wrapped = (delta > 0 && next < currentIndex) || (delta < 0 && next > currentIndex)
                     currentIndex = next
                     // Al dar la vuelta se salta sin animar el scroll largo
                     ensureVisible(!wrapped)
                     settleTimer.restart()
+                }
+
+                // Mantener: salto exacto sin animar (el foco queda clavado)
+                function stepHeld(delta) {
+                    if (loopedGames.length === 0) return
+                    currentIndex = advanceIndex(delta)
+                    scrollAnim.stop()
+                    ensureVisible(false)
                 }
 
                 function launchIndex(i) {
@@ -571,13 +629,13 @@ PlasmoidItem {
                     }
                 }
 
-                // Scroll suave al navegar con flechas (la rueda sigue directa)
+                // Scroll a velocidad constante al navegar (la rueda sigue directa)
                 NumberAnimation {
                     id: scrollAnim
                     target: flickable
                     property: "contentX"
                     duration: 120
-                    easing.type: Easing.OutCubic
+                    easing.type: Easing.Linear
                 }
 
                 // Centrado con reintentos: si el área aún no midió al abrir,
@@ -600,11 +658,38 @@ PlasmoidItem {
                 }
 
                 // Clavado final: tras navegar, el foco queda EXACTO al centro
-                // aunque la animación de scroll se haya reiniciado en vuelo
+                // (pegado al fin del scroll para que no se sienta pausa)
                 Timer {
                     id: settleTimer
-                    interval: 200
+                    interval: 150
                     onTriggered: drawerRoot.ensureVisible(false)
+                }
+
+                // Barrido al cambiar de categoría: atenuado breve de la fila
+                // para que el corte entre sets se perciba
+                NumberAnimation {
+                    id: catFlashAnim
+                    target: drawerRoot
+                    property: "catDim"
+                    from: 0.2
+                    to: 1.0
+                    duration: 250
+                    easing.type: Easing.OutCubic
+                }
+
+                // Apaga la ola tras el cambio (los rescaneos no ondean)
+                Timer {
+                    id: waveClearTimer
+                    interval: 700
+                    onTriggered: drawerRoot.waveArmed = false
+                }
+
+                // Repetición al mantener: un paso exacto por tick
+                Timer {
+                    id: holdTimer
+                    interval: 140
+                    repeat: true
+                    onTriggered: drawerRoot.stepHeld(drawerRoot.holdDelta)
                 }
 
                 // Reintento tras cambio de filtro: por si los bindings
@@ -618,10 +703,16 @@ PlasmoidItem {
                     }
                 }
 
-                Keys.onLeftPressed: moveSelection(-1)
-                Keys.onRightPressed: moveSelection(1)
-                Keys.onUpPressed: moveSelection(-1)
-                Keys.onDownPressed: moveSelection(1)
+                Keys.onLeftPressed: (event) => { pressStep(-1, event.isAutoRepeat) }
+                Keys.onRightPressed: (event) => { pressStep(1, event.isAutoRepeat) }
+                Keys.onUpPressed: (event) => { pressStep(-1, event.isAutoRepeat) }
+                Keys.onDownPressed: (event) => { pressStep(1, event.isAutoRepeat) }
+                Keys.onReleased: (event) => {
+                    if (event.key === Qt.Key_Left || event.key === Qt.Key_Right
+                            || event.key === Qt.Key_Up || event.key === Qt.Key_Down) {
+                        releaseHold()
+                    }
+                }
                 Keys.onReturnPressed: launchCurrent()
                 Keys.onEnterPressed: launchCurrent()
                 Keys.onSpacePressed: launchCurrent()
@@ -809,24 +900,28 @@ PlasmoidItem {
                             drawerRoot.nextCategory(-1)
                             event.accepted = true
                         } else if (event.key === Qt.Key_Down) {
+                            if (event.isAutoRepeat) { event.accepted = true; return }
                             flushFilter()
-                            drawerRoot.moveSelection(1)
+                            drawerRoot.moveSelectionAnimated(1)
                             event.accepted = true
                         } else if (event.key === Qt.Key_Up) {
                             if (text === "" && drawerRoot.currentIndex === 0) {
                                 drawerRoot.setSearchVisible(false)
                             } else {
+                                if (event.isAutoRepeat) { event.accepted = true; return }
                                 flushFilter()
-                                drawerRoot.moveSelection(-1)
+                                drawerRoot.moveSelectionAnimated(-1)
                             }
                             event.accepted = true
                         } else if (event.key === Qt.Key_Left) {
+                            if (event.isAutoRepeat) { event.accepted = true; return }
                             flushFilter()
-                            drawerRoot.moveSelection(-1)
+                            drawerRoot.moveSelectionAnimated(-1)
                             event.accepted = true
                         } else if (event.key === Qt.Key_Right) {
+                            if (event.isAutoRepeat) { event.accepted = true; return }
                             flushFilter()
-                            drawerRoot.moveSelection(1)
+                            drawerRoot.moveSelectionAnimated(1)
                             event.accepted = true
                         }
                     }
@@ -968,6 +1063,9 @@ PlasmoidItem {
                         id: gameRow
                         anchors.verticalCenter: parent.verticalCenter
                         spacing: drawerRoot.tileGap
+                        // Barrido de categoría: la fila entera se atenúa y
+                        // vuelve (sin Behaviors encima: el dip es exacto)
+                        opacity: drawerRoot.catDim
 
                         // Aire dinámico en ambos extremos: así la primera y la
                         // última también pueden quedar clavadas al centro
@@ -981,28 +1079,52 @@ PlasmoidItem {
                                 property var game: modelData
                                 property int tileIndex: index
                                 property bool selected: drawerRoot.currentIndex === tileIndex
+                                // Énfasis solo al asentar: en vuelo todo neutro para
+                                // que el foco se perciba fijo al centro
+                                property bool emph: selected && !scrollAnim.running
+                                // Última imagen lista: el frente nunca muestra vacío,
+                                // la trasera publica aquí solo lo ya decodificado
+                                property string shownSrc: ""
+                                // Multiplicador de ola de entrada (1 = normal)
+                                property real entryScale: 1.0
 
                                 height: drawerRoot.tileH
                                 width: drawerRoot.tileW
-                                // La seleccionada crece con rebote y queda por encima
-                                scale: selected ? 1.15 : 0.97
+                                // La seleccionada crece con rebote y queda por encima.
+                                // Manteniendo se desactiva el morph: pega instantáneo
+                                // y no vive a medio subir (tick y morph duran lo mismo)
+                                scale: (emph ? 1.15 : 0.97) * entryScale
                                 z: selected ? 10 : 1
 
                                 Behavior on scale {
+                                    enabled: !drawerRoot.holding && !drawerRoot.waveArmed
                                     NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
+                                }
+
+                                // Ola de entrada: espera según distancia al centro y crece
+                                // con pop (los rescaneos no ondean, solo el cambio)
+                                SequentialAnimation {
+                                    id: entryAnim
+                                    PauseAnimation { duration: Math.min(12, Math.abs(tileIndex - drawerRoot.currentIndex)) * 30 }
+                                    NumberAnimation { target: gameTile; property: "entryScale"; from: 0.55; to: 1.0; duration: 220; easing.type: Easing.OutBack }
+                                }
+                                Component.onCompleted: {
+                                    if (drawerRoot.waveArmed) entryAnim.restart()
                                 }
 
                                 // La activa se eleva (no mueve el layout, solo visual)
                                 transform: Translate {
                                     id: liftTr
-                                    y: selected ? -12 : 0
+                                    y: emph ? -12 : 0
                                     Behavior on y {
+                                        enabled: !drawerRoot.holding
                                         NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
                                     }
                                 }
 
                                 // Glow de énfasis potente en la seleccionada
-                                layer.enabled: selected
+                                // (solo al asentar: samples correcto para radius 16)
+                                layer.enabled: emph
                                 layer.effect: DropShadow {
                                     transparentBorder: true
                                     horizontalOffset: 0
@@ -1027,6 +1149,7 @@ PlasmoidItem {
                                     opacity: drawerRoot.scanning ? 0.15 : (selected ? 1.0 : 0.75)
 
                                     Behavior on opacity {
+                                        enabled: !drawerRoot.holding
                                         NumberAnimation { duration: 120 }
                                     }
 
@@ -1035,12 +1158,39 @@ PlasmoidItem {
                                         maskSource: mask
                                     }
 
+                                    // Relleno mientras carga la primera vez: nunca hueco
+                                    Rectangle {
+                                        anchors.fill: parent
+                                        color: drawerRoot.themeBg
+                                        opacity: 0.55
+                                        visible: gameTile.shownSrc === ""
+                                    }
+
                                     Image {
                                         id: image
                                         anchors.fill: parent
-                                        source: game.image
+                                        // Muestra la última lista (del caché, instantáneo);
+                                        // la trasera avisa cuando la nueva ya decodificó
+                                        source: gameTile.shownSrc
                                         fillMode: Image.PreserveAspectCrop
+                                        asynchronous: false
+                                        cache: true
+                                    }
+
+                                    // Trasera invisible: carga el arte del slot y solo
+                                    // al estar listo lo publica al frente (sin parpadeo)
+                                    Image {
+                                        visible: false
                                         asynchronous: true
+                                        cache: true
+                                        source: (game && game.image) || ""
+                                        onStatusChanged: {
+                                            if (status === Image.Ready) {
+                                                gameTile.shownSrc = source
+                                            } else if (status === Image.Error) {
+                                                console.log("GV art ERROR name=" + ((game && game.name) || "?"))
+                                            }
+                                        }
                                     }
 
                                     // Estrella de favorito (arriba-izquierda)
@@ -1094,8 +1244,8 @@ PlasmoidItem {
                                         text: game.name || ""
                                         elide: Text.ElideRight
                                         font.pixelSize: 13
-                                        font.bold: selected
-                                        color: selected ? drawerRoot.themeAccent : "white"
+                                        font.bold: gameTile.emph
+                                        color: gameTile.emph ? drawerRoot.themeAccent : "white"
                                         style: Text.Outline
                                         styleColor: "black"
                                     }
@@ -1107,10 +1257,11 @@ PlasmoidItem {
                                     radius: drawerRoot.themeRadius > 10 ? 10 : drawerRoot.themeRadius
                                     color: "transparent"
                                     border.color: drawerRoot.themeAccent
-                                    border.width: selected ? 2 : 0
-                                    opacity: selected ? 1.0 : 0.0
+                                    border.width: gameTile.emph ? 2 : 0
+                                    opacity: gameTile.emph ? 1.0 : 0.0
 
                                     Behavior on opacity {
+                                        enabled: !drawerRoot.holding
                                         NumberAnimation { duration: 120 }
                                     }
                                 }
