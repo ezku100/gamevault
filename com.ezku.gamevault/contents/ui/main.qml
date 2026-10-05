@@ -61,7 +61,7 @@ PlasmoidItem {
         // el timer de foco lo reintenta si aún no está activa
         if (drawerLoader.item.requestActivate) drawerLoader.item.requestActivate()
         if (drawerLoader.item.mainItem) {
-            drawerLoader.item.mainItem.currentIndex = 0
+            drawerLoader.item.mainItem.resetLoopIndex()
             drawerLoader.item.mainItem.forceActiveFocus()
             drawerLoader.item.mainItem.startFocusTimer()
             drawerLoader.item.mainItem.startCenterTimer()
@@ -144,8 +144,7 @@ PlasmoidItem {
 
         root.gamesModel = filtered
         if (drawerLoader.item && drawerLoader.item.mainItem) {
-            var m = drawerLoader.item.mainItem
-            if (m.currentIndex >= filtered.length) m.currentIndex = Math.max(0, filtered.length - 1)
+            drawerLoader.item.mainItem.rebaseLoop()
         }
     }
 
@@ -156,7 +155,30 @@ PlasmoidItem {
                 console.log("Scan output is not an array")
                 return
             }
-            root.rawGames = parsed
+            // Si la lista es idéntica no se reconstruye (evita el parpadeo
+            // y que el loop "cargue tarde" al abrir): solo se refrescan flags
+            var same = parsed.length === root.rawGames.length
+            if (same) {
+                for (var i = 0; i < parsed.length; i++) {
+                    if (String(parsed[i].name) !== String(root.rawGames[i].name)
+                        || String(parsed[i].runcmd) !== String(root.rawGames[i].runcmd)) {
+                        same = false
+                        break
+                    }
+                }
+            }
+            if (same) {
+                for (var j = 0; j < parsed.length; j++) {
+                    var cur = root.rawGames[j], nxt = parsed[j]
+                    cur.lastPlayed = nxt.lastPlayed
+                    cur.favorite = nxt.favorite
+                    cur.hidden = nxt.hidden
+                    cur.image = nxt.image
+                    cur.runcmd = nxt.runcmd
+                }
+            } else {
+                root.rawGames = parsed
+            }
         } catch (e) {
             console.log("Failed to parse steam scan output:", e)
             return
@@ -225,11 +247,13 @@ PlasmoidItem {
             onVisibleChanged: {
                 if (!mainItem) return
                 if (visible) {
-                    mainItem.currentIndex = 0
+                    mainItem.resetLoopIndex()
                     mainItem.category = "Todos"
                     mainItem.searchText = ""
                     searchField.text = ""
                     mainItem.searchVisible = false
+                    scrollAnim.stop()
+                    flickable.contentX = 0
                     if (requestActivate) requestActivate()
                     mainItem.forceActiveFocus()
                     mainItem.startFocusTimer()
@@ -239,6 +263,8 @@ PlasmoidItem {
                 } else {
                     focusTimer.stop()
                     centerTimer.stop()
+                    settleTimer.stop()
+                    fixupTimer.stop()
                     scanMinTimer.stop()
                     scanStatusTimer.stop()
                     mainItem.scanStatus = ""
@@ -282,11 +308,48 @@ PlasmoidItem {
                     if (searchText === "") return base
                     return base.filter(function(g) { return (g.name || "").toLowerCase().indexOf(searchText.toLowerCase()) !== -1 }).slice(0, 80)
                 }
+                // Carrusel infinito: se repite la base para que la fila siempre
+                // se vea llena; el índice vive en las copias centrales
+                function loopReps() {
+                    var n = filteredGames.length
+                    if (n <= 1) return 1
+                    if (n < 8) return 6
+                    if (n < 20) return 4
+                    if (n < 60) return 3
+                    return 2
+                }
+                property var loopedGames: {
+                    var base = filteredGames
+                    var out = []
+                    for (var k = 0; k < loopReps(); k++) out = out.concat(base)
+                    return out
+                }
+                function resetLoopIndex() {
+                    var n = filteredGames.length
+                    if (n === 0) {
+                        currentIndex = 0
+                        return
+                    }
+                    currentIndex = Math.min(n * Math.floor(loopReps() / 2), loopedGames.length - 1)
+                }
+                // Tras reconstruir el modelo conserva la posición equivalente
+                // dentro de las copias centrales
+                function rebaseLoop() {
+                    var n = filteredGames.length
+                    if (n === 0 || loopedGames.length === 0) {
+                        currentIndex = 0
+                        return
+                    }
+                    var mid = n * Math.floor(loopReps() / 2)
+                    var off = ((currentIndex % n) + n) % n
+                    currentIndex = Math.min(mid + off, loopedGames.length - 1)
+                }
 
                 function setCategory(c) {
                     category = c
-                    currentIndex = 0
+                    resetLoopIndex()
                     centerTimer.start()
+                    fixupTimer.restart()
                 }
 
                 function nextCategory(delta) {
@@ -299,8 +362,8 @@ PlasmoidItem {
                 }
 
                 function toggleHidden() {
-                    if (filteredGames.length === 0) return
-                    var g = filteredGames[Math.max(0, Math.min(filteredGames.length - 1, currentIndex))]
+                    if (loopedGames.length === 0) return
+                    var g = loopedGames[Math.max(0, Math.min(loopedGames.length - 1, currentIndex))]
                     if (!g || !g.name) return
                     var safe = String(g.name).replace(/"/g, '\\"')
                     root.runCommand('python3 $HOME/.local/share/plasma/plasmoids/com.ezku.gamevault/contents/scripts/toggle_hidden.py "' + safe + '"')
@@ -313,12 +376,15 @@ PlasmoidItem {
                     // Solo reconstruir si sale de la vista (evita el parpadeo)
                     var leavesView = (category !== "Ocultos" && nowHidden)
                         || (category === "Ocultos" && !nowHidden)
-                    if (leavesView) root.applyFilters()
+                    if (leavesView) {
+                        root.applyFilters()
+                        rebaseLoop()
+                    }
                 }
 
                 function toggleFavorite() {
-                    if (filteredGames.length === 0) return
-                    var g = filteredGames[Math.max(0, Math.min(filteredGames.length - 1, currentIndex))]
+                    if (loopedGames.length === 0) return
+                    var g = loopedGames[Math.max(0, Math.min(loopedGames.length - 1, currentIndex))]
                     if (!g || !g.name) return
                     var safe = String(g.name).replace(/"/g, '\\"')
                     root.runCommand('python3 $HOME/.local/share/plasma/plasmoids/com.ezku.gamevault/contents/scripts/toggle_favorite.py "' + safe + '"')
@@ -330,7 +396,10 @@ PlasmoidItem {
                     }
                     // Solo reconstruir si sale de la vista (evita el parpadeo):
                     // la estrella se actualiza sola por binding en el mismo delegate
-                    if (category === "Favoritos" && !nowFav) root.applyFilters()
+                    if (category === "Favoritos" && !nowFav) {
+                        root.applyFilters()
+                        rebaseLoop()
+                    }
                 }
                 readonly property real tileH: (height - contentTop - 14 - 44) / 1.3
                 readonly property real tileW: tileH * 2.1395
@@ -359,6 +428,14 @@ PlasmoidItem {
                         return
                     }
                     needsCenter = false
+                    // Fila corta: se centra completa en vez de recargarse a la izquierda
+                    // (los espaciadores inflan contentWidth: se mide solo tarjetas,
+                    // incluyendo las copias del loop)
+                    if (loopedGames.length * (tileW + tileGap) <= vw) {
+                        scrollAnim.stop()
+                        flickable.contentX = (flickable.contentWidth - vw) / 2
+                        return
+                    }
                     var pad = Math.max(0, (vw - tileW) / 2)
                     // OJO: el Row suma un spacing tras el espaciador inicial
                     var x = pad + tileGap + currentIndex * (tileW + tileGap)
@@ -381,14 +458,28 @@ PlasmoidItem {
                 }
 
                 function moveSelection(delta) {
-                    if (filteredGames.length === 0) return
-                    currentIndex = Math.max(0, Math.min(filteredGames.length - 1, currentIndex + delta))
-                    ensureVisible(true)
+                    var total = loopedGames.length
+                    if (total === 0) return
+                    var n = filteredGames.length
+                    var next = (currentIndex + delta) % total
+                    if (next < 0) next += total
+                    // Rebote entre copias centrales: loop infinito real
+                    if (n > 0) {
+                        var mid = n * Math.floor(loopReps() / 2)
+                        while (next < mid) next += n
+                        while (next >= mid + n) next -= n
+                        next = Math.min(next, total - 1)
+                    }
+                    var wrapped = (delta > 0 && next < currentIndex) || (delta < 0 && next > currentIndex)
+                    currentIndex = next
+                    // Al dar la vuelta se salta sin animar el scroll largo
+                    ensureVisible(!wrapped)
+                    settleTimer.restart()
                 }
 
                 function launchIndex(i) {
-                    if (i < 0 || i >= filteredGames.length) return
-                    var g = filteredGames[i]
+                    if (i < 0 || i >= loopedGames.length) return
+                    var g = loopedGames[i]
                     root.recordLaunch(g.name)
                     var arr = root.rawGames.slice()
                     var idx = arr.indexOf(g)
@@ -398,7 +489,7 @@ PlasmoidItem {
                         root.rawGames = arr
                         root.applyFilters()
                     }
-                    currentIndex = 0
+                    resetLoopIndex()
                     drawerLoader.item.visible = false
                     root.runCommand(g.runcmd)
                 }
@@ -449,15 +540,16 @@ PlasmoidItem {
                         searchVisible = false
                         searchText = ""
                         searchField.text = ""
-                        currentIndex = 0
+                        resetLoopIndex()
                         focus = true
                         forceActiveFocus()
                     }
                 }
 
                 onSearchTextChanged: {
-                    currentIndex = 0
+                    resetLoopIndex()
                     centerTimer.start()
+                    fixupTimer.restart()
                 }
 
                 // En Wayland el diálogo Dock no siempre toma el foco al
@@ -484,7 +576,7 @@ PlasmoidItem {
                     id: scrollAnim
                     target: flickable
                     property: "contentX"
-                    duration: 250
+                    duration: 120
                     easing.type: Easing.OutCubic
                 }
 
@@ -504,6 +596,25 @@ PlasmoidItem {
                         if (!drawerRoot.needsCenter || tries >= 10) {
                             stop(); tries = 0
                         }
+                    }
+                }
+
+                // Clavado final: tras navegar, el foco queda EXACTO al centro
+                // aunque la animación de scroll se haya reiniciado en vuelo
+                Timer {
+                    id: settleTimer
+                    interval: 200
+                    onTriggered: drawerRoot.ensureVisible(false)
+                }
+
+                // Reintento tras cambio de filtro: por si los bindings
+                // aún no se habían actualizado al resetear el índice
+                Timer {
+                    id: fixupTimer
+                    interval: 120
+                    onTriggered: {
+                        drawerRoot.rebaseLoop()
+                        drawerRoot.ensureVisible(false)
                     }
                 }
 
@@ -670,8 +781,8 @@ PlasmoidItem {
                     onAccepted: {
                         searchDebounce.stop()
                         drawerRoot.searchText = text
-                        if (drawerRoot.currentIndex >= drawerRoot.filteredGames.length) {
-                            drawerRoot.currentIndex = Math.max(0, drawerRoot.filteredGames.length - 1)
+                        if (drawerRoot.currentIndex >= drawerRoot.loopedGames.length) {
+                            drawerRoot.rebaseLoop()
                         }
                         drawerRoot.launchCurrent()
                     }
@@ -768,7 +879,8 @@ PlasmoidItem {
                     }
                 }
 
-                // Pestañas de categoría (arriba-izquierda, Tab rota, Shift+Tab atrás)
+                // Pestañas de categoría (arriba-izquierda, Tab rota, Shift+Tab atrás).
+                // Se ocultan al buscar para no encimarse con el campo
                 Row {
                     anchors.top: parent.top
                     anchors.left: parent.left
@@ -776,6 +888,7 @@ PlasmoidItem {
                     anchors.leftMargin: 16
                     spacing: 12
                     z: 200
+                    visible: !drawerRoot.searchVisible
 
                     Repeater {
                         model: drawerRoot.categories
@@ -783,9 +896,9 @@ PlasmoidItem {
                         delegate: Text {
                             text: modelData
                             color: drawerRoot.category === modelData ? drawerRoot.themeAccent : drawerRoot.themeText
-                            opacity: drawerRoot.category === modelData ? 1.0 : 0.55
+                            opacity: drawerRoot.category === modelData ? 1.0 : 0.9
                             font.pixelSize: 12
-                            font.bold: drawerRoot.category === modelData
+                            font.bold: true
 
                             MouseArea {
                                 anchors.fill: parent
@@ -861,7 +974,7 @@ PlasmoidItem {
                         Item { width: Math.max(0, (flickable.width - drawerRoot.tileW) / 2); height: 1 }
 
                         Repeater {
-                            model: drawerRoot.filteredGames
+                            model: drawerRoot.loopedGames
 
                             delegate: Item {
                                 id: gameTile
@@ -876,7 +989,7 @@ PlasmoidItem {
                                 z: selected ? 10 : 1
 
                                 Behavior on scale {
-                                    NumberAnimation { duration: 320; easing.type: Easing.OutBack }
+                                    NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
                                 }
 
                                 // La activa se eleva (no mueve el layout, solo visual)
@@ -884,34 +997,20 @@ PlasmoidItem {
                                     id: liftTr
                                     y: selected ? -12 : 0
                                     Behavior on y {
-                                        NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+                                        NumberAnimation { duration: 140; easing.type: Easing.OutCubic }
                                     }
                                 }
 
-                                // Sombra base en todas + glow de énfasis en la seleccionada
-                                layer.enabled: true
+                                // Glow de énfasis potente en la seleccionada
+                                layer.enabled: selected
                                 layer.effect: DropShadow {
                                     transparentBorder: true
                                     horizontalOffset: 0
-                                    verticalOffset: selected ? 0 : 4
-                                    radius: selected ? 20 : 10
+                                    verticalOffset: 2
+                                    radius: 16
                                     samples: 33
-                                    spread: selected ? 0.4 : 0.1
-                                    color: selected ? drawerRoot.themeAccent : Qt.rgba(0, 0, 0, 0.75)
-                                }
-
-                                // Anillo neón: borde de énfasis en la seleccionada
-                                Rectangle {
-                                    anchors.fill: parent
-                                    radius: drawerRoot.themeRadius > 10 ? 10 : drawerRoot.themeRadius
-                                    color: "transparent"
-                                    border.color: drawerRoot.themeAccent
-                                    border.width: selected ? 3 : 0
-                                    opacity: selected ? 1.0 : 0.0
-
-                                    Behavior on opacity {
-                                        NumberAnimation { duration: 180 }
-                                    }
+                                    spread: 0.3
+                                    color: drawerRoot.themeAccent
                                 }
 
                                 Rectangle {
@@ -928,7 +1027,7 @@ PlasmoidItem {
                                     opacity: drawerRoot.scanning ? 0.15 : (selected ? 1.0 : 0.75)
 
                                     Behavior on opacity {
-                                        NumberAnimation { duration: 220 }
+                                        NumberAnimation { duration: 120 }
                                     }
 
                                     layer.enabled: true
@@ -1002,12 +1101,27 @@ PlasmoidItem {
                                     }
                                 }
 
+                                // Anillo neón sobre la imagen: borde de énfasis en la seleccionada
+                                Rectangle {
+                                    anchors.fill: parent
+                                    radius: drawerRoot.themeRadius > 10 ? 10 : drawerRoot.themeRadius
+                                    color: "transparent"
+                                    border.color: drawerRoot.themeAccent
+                                    border.width: selected ? 2 : 0
+                                    opacity: selected ? 1.0 : 0.0
+
+                                    Behavior on opacity {
+                                        NumberAnimation { duration: 120 }
+                                    }
+                                }
+
                                 MouseArea {
                                     anchors.fill: parent
                                     enabled: drawerRoot.mouseEnabled
                                     hoverEnabled: true
                                     onEntered: {
                                         drawerRoot.currentIndex = tileIndex
+                                        drawerRoot.ensureVisible(true)
                                         // El hover es interacción de usuario: KWin sí concede el foco aquí
                                         if (drawerLoader.item && drawerLoader.item.requestActivate) drawerLoader.item.requestActivate()
                                         drawerRoot.forceActiveFocus()

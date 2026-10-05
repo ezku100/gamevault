@@ -9,7 +9,7 @@
         "Id": "com.ezku.gamevault",
         "Name": "Game Vault (ezku)",
         "License": "GPL-3.0-or-later",
-        "Version": "1.4.1"
+        "Version": "1.5"
     },
     "KPackageStructure": "Plasma/Applet",
     "X-Plasma-API-Minimum-Version": "6.0"
